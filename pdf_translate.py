@@ -1,4 +1,4 @@
-import openai
+import openai, time
 import pdfplumber
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib import colors
@@ -35,24 +35,35 @@ def translate_text(text_to_translate, target_language, api_keys):
     openai.api_key = api_keys[current_key_index]
 
     for index, line in enumerate(text_to_translate):
-        try:
-            response = openai.Completion.create(
-                engine="text-davinci-002",
-                prompt=f"Translate the following English text to {target_language}:\n\n{line}\n",
-                max_tokens=1024,
-                n=1,
-                stop=None,
-                temperature=0.5,
-            )
-            translation = response.choices[0].text.strip()
-            translations.append(translation)
-            print(f"Translated line {index + 1}/{len(text_to_translate)}")
-        except openai.error.RateLimitError:
-            if current_key_index + 1 < len(api_keys):
-                current_key_index += 1
-                openai.api_key = api_keys[current_key_index]
-            else:
-                raise Exception("All API keys have reached their rate limits.")
+        while True:
+            try:
+                response = openai.Completion.create(
+                    engine="text-davinci-002",
+                    prompt=f"Translate the following English text to {target_language}:\n\n{line}\n",
+                    max_tokens=1024,
+                    n=1,
+                    stop=None,
+                    temperature=0.5,
+                )
+                translation = response.choices[0].text.strip()
+                print(line)
+                print(translation)
+                print()
+                translations.append(translation)
+                print(f"Translated line {index + 1}/{len(text_to_translate)}")
+                break
+            except openai.error.RateLimitError:
+                if current_key_index + 1 < len(api_keys):
+                    current_key_index += 1
+                    openai.api_key = api_keys[current_key_index]
+                else:
+                    raise Exception("All API keys have reached their rate limits.")
+                    time.sleep(10)
+            
+            except Exception as e:
+                print(f"Error translating line {index + 1}/{len(text_to_translate)}: {e}")
+                time.sleep(2)
+        time.sleep(1)
 
     return translations
 
@@ -73,22 +84,23 @@ def save_translation_to_pdf(original_text, translated_text, filename):
     doc.build(elements)
 
 
-# 获取用户的API密钥列表
-api_keys = get_api_keys()
+if __name__ == '__main__':
+    # 获取用户的API密钥列表
+    api_keys = get_api_keys()
 
-# 获取要翻译的文件名
-input_filename = input("Enter the name of the PDF file you want to translate: ")
+    # 获取要翻译的文件名
+    input_filename = input("Enter the name of the PDF file you want to translate: ")
 
-# 从PDF文件中获取要翻译的多个行
-text_to_translate = get_lines_from_pdf(input_filename)
+    # 从PDF文件中获取要翻译的多个行
+    text_to_translate = get_lines_from_pdf(input_filename)
 
-# 获取目标语言
-target_language = input("Enter the target language (e.g., Chinese, Spanish, French): ")
+    # 获取目标语言
+    target_language = input("Enter the target language (e.g., Chinese, Spanish, French): ")
 
-# 翻译文本
-translated_text = translate_text(text_to_translate, target_language, api_keys)
+    # 翻译文本
+    translated_text = translate_text(text_to_translate, target_language, api_keys)
 
-# 将原始文本和翻译结果保存到一个PDF文件
-output_filename = "translation_result.pdf"
-save_translation_to_pdf(text_to_translate, translated_text, output_filename)
-print(f"Translation and original text have been saved to {output_filename}")
+    # 将原始文本和翻译结果保存到一个PDF文件
+    output_filename = "translation_result.pdf"
+    save_translation_to_pdf(text_to_translate, translated_text, output_filename)
+    print(f"Translation and original text have been saved to {output_filename}")
